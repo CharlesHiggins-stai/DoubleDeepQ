@@ -3,14 +3,15 @@ from numpy.lib.ufunclike import _fix_out_named_y
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import load_model
 import numpy as np
 
 class DDQN(keras.Model):
-    def __init__(self, fc1_dims, fc2_dims, n_actions):
-        super(DuellingDeepQNetwork, self).__init__()
-        self.dense1 = keras.layers.Dense(fc1_dims, activation ='relu')
+    def __init__(self, input_dims, fc1_dims, fc2_dims, n_actions):
+        super(DDQN, self).__init__()
+        self.dense1 = keras.layers.Dense(fc1_dims, activation ='relu', input_shape=)
         self.dense2 = keras.layers.Dense(fc2_dims, activation = 'relu')
-        self.V = keras.layers.Dense(1, actvation = None)
+        self.V = keras.layers.Dense(1, activation = None)
         self.A = keras.layers.Dense(n_actions, activation= None)
 
     def call(self, state):
@@ -34,7 +35,7 @@ class RepBuff:
         self.mem_cntr = 0
         self.state_memory = np.zeros((self.mem_size, *input_shape), dtype = np.float32)
         self.new_state_memory = np.zeros((self.mem_size, *input_shape), dtype = np.float32)
-        self.action_memory = np.zeros(self.mem_size, dtype=int32)
+        self.action_memory = np.zeros(self.mem_size, dtype=np.int32)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype = np.bool)
     
@@ -72,6 +73,7 @@ class Agent:
         self.epsilon_end = epsilon_end
         self.fname = fname 
         self.replace = replace
+        self.batch_size = batch_size
 
         # hyperparams
         self.learn_step_counter = 0
@@ -97,8 +99,35 @@ class Agent:
     
     def learn(self):
         # TODO: COMPLETE BY TOMORROW EOD. 
+        if self.memory.mem_cntr < self.batch_size:
+            # if we haven't enough observations to train on yet
+            return 
+        if self.learn_step_counter % self.replace == 0:
+            self.q_next.set_weights(self.q_eval.get_weights())
+        states, actions, rewards, new_states, dones = \
+            self.memory.sample_buffer(self.batch_size)
+        q_pred = self.q_eval(states)
+        q_next = tf.math.reduce_max(self.q_next(new_states),axis =1, keepdims=True).numpy()
+        q_target = np.copy(q_pred)
+
+        for idx, terminal in enumerate(dones):
+            if terminal:
+                q_next[idx] = 0.0
+            q_target[idx,actions[idx]] = rewards[idx] + self.gamma *q_next[idx]
+        self.q_eval.train_on_batch(states, q_target)
+        self.epsilon = self.epsilon - self.epsilon_dec if self.epsilon > self.epsilon_end else self.epsilon_end
+        self.learn_step_counter += 1
+
+    def save_model(self):
+        self.q_eval.save(self.fname)
+    
+    def load_model(self):
+        self.q_eval = load_model(self.fname)
 
 
+
+
+            
 
 
 
