@@ -1,3 +1,4 @@
+from tensorflow.python.util.tf_export import get_symbol_from_name
 from ddq import Agent
 import numpy as np
 import gym 
@@ -6,7 +7,8 @@ from utils import plot_learning_curve
 if __name__ == "__main__":
     env = gym.make('LunarLander-v2')
     n_games = 400
-    agent = Agent(lr = 1e-3, gamma = 0.99, epsilon=1, batch_size=64, input_dims=[8], n_actions = 4)
+    
+    agent = Agent(lr = 1e-3, gamma=0.99, n_actions=4, epsilon=1, batch_size=64, input_dims=[8],epsilon_dec=0.001)
     scores, eps_history = [],[]
 
     for i in range(n_games):
@@ -24,8 +26,8 @@ if __name__ == "__main__":
         avg_score = np.mean(scores[-100:])
         print("episode {}, score: {}".format(i, score))
         print("average score: {}".format(avg_score))
-        print("epsilon = {.2f}".format(agent.epsilon))
+        print("epsilon = {}".format(agent.epsilon))
     filename = 'keras_lunar_lander.png'
-    x = [i+1 for i in range[n_games]]
+    x = [i+1 for i in range(n_games)]
     plot_learning_curve(x, scores, eps_history, filename)
             

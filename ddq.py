@@ -9,27 +9,33 @@ import numpy as np
 class DDQN(keras.Model):
     def __init__(self, input_dims, fc1_dims, fc2_dims, n_actions):
         super(DDQN, self).__init__()
-        self.dense1 = keras.layers.Dense(fc1_dims, activation ='relu', input_shape=)
-        self.dense2 = keras.layers.Dense(fc2_dims, activation = 'relu')
-        self.V = keras.layers.Dense(1, activation = None)
-        self.A = keras.layers.Dense(n_actions, activation= None)
+        assert input_dims == [8,]
+        self.dense0 = tf.keras.layers.Dense(input_dims[0], activation='relu')
+        self.dense1 = tf.keras.layers.Dense(fc1_dims, activation ='relu')
+        self.dense2 = tf.keras.layers.Dense(fc2_dims, activation = 'relu')
+        self.V = tf.keras.layers.Dense(1, activation = None)
+        self.A = tf.keras.layers.Dense(n_actions, activation= None)
 
     def call(self, state):
-        x = self.dense1(state)
-        x = self.dense2(x)
-        V = self.V(x)
-        A = self.A(x)
-        Q = (V + (A - tf.math.reduce_mean(A, axis=1, keepdims =True)))
+        x = self.dense0(state)
+        y = self.dense1(x)
+        z = self.dense2(y)
+        V = self.V(z)
+        A = self.A(z)
+        Q = (V + (A - tf.math.reduce_mean(A, axis=1, keepdims =True))) 
 
         return Q 
 
     def advantage(self, state):
-        x = self.dense1(state)
-        x = self.dense2(state)
-        A = self.A(x)
+        x = self.dense0(state)
+        y = self.dense1(x)
+        z = self.dense2(y)
+        A = self.A(z)
         return A
      
 class RepBuff:
+    # store the state transitions --- so we initially set up numpy arrays of a set size.
+    # one for each: state, action, reward, newstate, done...
     def __init__(self, max_size, input_shape):
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -39,7 +45,8 @@ class RepBuff:
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype = np.bool)
     
-    def store_tranistion(self, state, action, reward, state_, done):
+    # store each transition....
+    def store_transition(self, state, action, reward, state_, done):
         index = self.mem_cntr % self.mem_size
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -49,6 +56,7 @@ class RepBuff:
 
         self.mem_cntr += 1
 
+    # function to sample a batch of a set size (batch_size) from the replay buffer... 
     def sample_buffer(self, batch_size):
         max_mem = min(self.mem_cntr, self.mem_size)
         batch = np.random.choice(max_mem, batch_size, replace=False)
@@ -65,7 +73,7 @@ class RepBuff:
 class Agent:
     def __init__(self, lr, gamma, n_actions, epsilon, batch_size, input_dims, epsilon_dec = 1e-3, epsilon_end = 0.01, mem_size = 100000, fname = 'ddq_DQN.h5', fc1_dims = 128, fc2_dms = 124, replace = 100):
     
-        # store parameters
+        # store parameters that have been passed in
         self.action_space = [i for i in range(n_actions)]
         self.gamma = gamma
         self.epsilon = epsilon
@@ -75,16 +83,16 @@ class Agent:
         self.replace = replace
         self.batch_size = batch_size
 
-        # hyperparams
+        # initialise the step-counter, the memory, set up and compile both networks...
         self.learn_step_counter = 0
         self.memory  = RepBuff(mem_size, input_dims)
-        self.q_eval = DDQN(fc1_dims, fc2_dms, n_actions)
-        self.q_next = DDQN(fc1_dims, fc2_dms, n_actions)
+        self.q_eval = DDQN(input_dims, fc1_dims, fc2_dms, n_actions)
+        self.q_next = DDQN(input_dims, fc1_dims, fc2_dms, n_actions)
         self.q_eval.compile(optimizer=Adam(learning_rate=lr),loss='mean_squared_error')
         self.q_next.compile(optimizer=Adam(learning_rate=lr),loss='mean_squared_error')
         
     def store_transition(self, state, action, reward, new_state, done):
-        self.memory.store_tranistion(state, action, reward, new_state, done)
+        self.memory.store_transition(state, action, reward, new_state, done)
     
     def choose_action(self, observation):
         # epsilon greedy
@@ -98,12 +106,14 @@ class Agent:
         return action
     
     def learn(self):
-        # TODO: COMPLETE BY TOMORROW EOD. 
         if self.memory.mem_cntr < self.batch_size:
             # if we haven't enough observations to train on yet
             return 
+        # assuming we have enough memory...
+        # update/transfer weights from one network to another network based on hyperparams...
         if self.learn_step_counter % self.replace == 0:
             self.q_next.set_weights(self.q_eval.get_weights())
+        # DRAW A BATCH OF SIZE     
         states, actions, rewards, new_states, dones = \
             self.memory.sample_buffer(self.batch_size)
         q_pred = self.q_eval(states)
